@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Team Scoreboard</title>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    .team { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; border-radius: 8px; }
+    .score { font-size: 20px; margin: 5px 0; }
+    .team-logo { width: 60px; height: 60px; object-fit: contain; }
+  </style>
+</head>
+<body>
+  <h1>🏆 Team Scoreboard</h1>
+
+  <div>
+    <input type="text" id="teamName" placeholder="Team Name">
+    <input type="text" id="teamMembers" placeholder="Members (comma-separated)">
+    <input type="text" id="teamLogo" placeholder="Logo URL (optional)">
+    <button onclick="addTeam()">Add Team</button>
+  </div>
+
+  <div id="teams"></div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, addDoc, onSnapshot, updateDoc, doc, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // Replace with your Firebase config
+    const firebaseConfig = {
+        apiKey: "AIzaSyAmDBelUbSmLhY1VFIw2DiQvTRHqrG0kAk",
+        authDomain: "team-scoreboard-1ce77.firebaseapp.com",
+        projectId: "team-scoreboard-1ce77",
+        storageBucket: "team-scoreboard-1ce77.firebasestorage.app",
+        messagingSenderId: "109272670537",
+        appId: "1:109272670537:web:50ef6884762c7aef5efa98",
+        measurementId: "G-36QW4J7PHM"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const teamsRef = collection(db, "teams");
+
+    async function addTeam() {
+      const name = document.getElementById("teamName").value.trim();
+      const members = document.getElementById("teamMembers").value.split(',').map(m => m.trim()).filter(Boolean);
+      const logo = document.getElementById("teamLogo").value.trim();
+
+      if (!name || members.length === 0) return alert("Enter team name and members.");
+
+      await addDoc(teamsRef, {
+        name,
+        members,
+        logo,
+        score: 0
+      });
+
+      document.getElementById("teamName").value = "";
+      document.getElementById("teamMembers").value = "";
+      document.getElementById("teamLogo").value = "";
+    }
+
+    function renderTeams(teams) {
+      const container = document.getElementById("teams");
+      container.innerHTML = "";
+
+      // Sort by score descending
+      teams.sort((a, b) => b.score - a.score);
+
+      const medals = ["🥇", "🥈", "🥉"];
+
+      teams.forEach((team, index) => {
+        const div = document.createElement("div");
+        div.className = "team";
+
+        let html = `
+          ${team.logo ? `<img src="${team.logo}" class="team-logo"><br>` : ""}
+          <h2>${medals[index] || ""} ${team.name}</h2>
+          <div class="score">Score: ${team.score}</div>
+          <button onclick="updateScore('${team.id}', 1)">+1</button>
+          <button onclick="updateScore('${team.id}', -1)">-1</button>
+          <div><strong>Members:</strong> ${team.members.join(', ')}</div>
+        `;
+        div.innerHTML = html;
+        container.appendChild(div);
+      });
+    }
+
+    async function updateScore(id, change) {
+      const ref = doc(db, "teams", id);
+      await updateDoc(ref, { score: increment(change) });
+    }
+
+    onSnapshot(teamsRef, snapshot => {
+      const teams = [];
+      snapshot.forEach(doc => {
+        teams.push({ id: doc.id, ...doc.data() });
+      });
+      renderTeams(teams);
+    });
+  </script>
+</body>
+</html>
