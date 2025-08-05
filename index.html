@@ -3,16 +3,68 @@
 <head>
   <title>Team Scoreboard</title>
   <style>
-    body { font-family: Arial; padding: 20px; }
-    .team { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; border-radius: 8px; }
-    .score { font-size: 20px; margin: 5px 0; }
-    .team-logo { width: 60px; height: 60px; object-fit: contain; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      padding: 20px;
+      max-width: 800px;
+      margin: auto;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    .input-group {
+      margin-bottom: 10px;
+    }
+
+    input {
+      padding: 8px;
+      margin-right: 5px;
+      width: 200px;
+    }
+
+    button {
+      padding: 8px 12px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .team {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin: 15px 0;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .team-logo {
+      width: 50px;
+      height: 50px;
+      object-fit: contain;
+      float: right;
+    }
+
+    .score {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+    }
   </style>
 </head>
 <body>
+
   <h1>🏆 Team Scoreboard</h1>
 
-  <div>
+  <div class="input-group">
     <input type="text" id="teamName" placeholder="Team Name">
     <input type="text" id="teamMembers" placeholder="Members (comma-separated)">
     <input type="text" id="teamLogo" placeholder="Logo URL (optional)">
@@ -24,17 +76,19 @@
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, addDoc, onSnapshot, updateDoc, doc, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import {
+      getFirestore, collection, addDoc, doc,
+      onSnapshot, updateDoc, increment
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-    // Replace with your Firebase config
+    // 🔥 Replace this with your Firebase config:
     const firebaseConfig = {
-        apiKey: "AIzaSyAmDBelUbSmLhY1VFIw2DiQvTRHqrG0kAk",
-        authDomain: "team-scoreboard-1ce77.firebaseapp.com",
-        projectId: "team-scoreboard-1ce77",
-        storageBucket: "team-scoreboard-1ce77.firebasestorage.app",
-        messagingSenderId: "109272670537",
-        appId: "1:109272670537:web:50ef6884762c7aef5efa98",
-        measurementId: "G-36QW4J7PHM"
+      apiKey: "AIzaSyAmDBelUbSmLhY1VFIw2DiQvTRHqrG0kAk",
+      authDomain: "team-scoreboard-1ce77.firebaseapp.com",
+      projectId: "team-scoreboard-1ce77",
+      storageBucket: "team-scoreboard-1ce77.firebasestorage.app",
+      messagingSenderId: "G-36QW4J7PHM",
+      appId: "1:109272670537:web:50ef6884762c7aef5efa98"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -43,10 +97,15 @@
 
     async function addTeam() {
       const name = document.getElementById("teamName").value.trim();
-      const members = document.getElementById("teamMembers").value.split(',').map(m => m.trim()).filter(Boolean);
+      const memberInput = document.getElementById("teamMembers").value.trim();
       const logo = document.getElementById("teamLogo").value.trim();
 
-      if (!name || members.length === 0) return alert("Enter team name and members.");
+      if (!name || !memberInput) {
+        alert("Please enter team name and at least one member.");
+        return;
+      }
+
+      const members = memberInput.split(",").map(m => m.trim()).filter(Boolean);
 
       await addDoc(teamsRef, {
         name,
@@ -60,11 +119,16 @@
       document.getElementById("teamLogo").value = "";
     }
 
+    async function updateScore(teamId, change) {
+      const ref = doc(db, "teams", teamId);
+      await updateDoc(ref, { score: increment(change) });
+    }
+
     function renderTeams(teams) {
       const container = document.getElementById("teams");
       container.innerHTML = "";
 
-      // Sort by score descending
+      // Sort teams by score descending
       teams.sort((a, b) => b.score - a.score);
 
       const medals = ["🥇", "🥈", "🥉"];
@@ -73,27 +137,31 @@
         const div = document.createElement("div");
         div.className = "team";
 
-        let html = `
-          ${team.logo ? `<img src="${team.logo}" class="team-logo"><br>` : ""}
-          <h2>${medals[index] || ""} ${team.name}</h2>
+        const name = team.name || "Unnamed Team";
+        const members = Array.isArray(team.members)
+          ? team.members.join(", ")
+          : "No members listed";
+        const logoHtml = team.logo
+          ? `<img src="${team.logo}" class="team-logo" alt="logo">`
+          : "";
+
+        div.innerHTML = `
+          ${logoHtml}
+          <h2>${medals[index] || ""} ${name}</h2>
           <div class="score">Score: ${team.score}</div>
           <button onclick="updateScore('${team.id}', 1)">+1</button>
           <button onclick="updateScore('${team.id}', -1)">-1</button>
-          <div><strong>Members:</strong> ${team.members.join(', ')}</div>
+          <p><strong>Members:</strong> ${members}</p>
         `;
-        div.innerHTML = html;
+
         container.appendChild(div);
       });
     }
 
-    async function updateScore(id, change) {
-      const ref = doc(db, "teams", id);
-      await updateDoc(ref, { score: increment(change) });
-    }
-
-    onSnapshot(teamsRef, snapshot => {
+    // Real-time updates from Firestore
+    onSnapshot(teamsRef, (snapshot) => {
       const teams = [];
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc) => {
         teams.push({ id: doc.id, ...doc.data() });
       });
       renderTeams(teams);
