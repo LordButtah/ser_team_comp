@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Team Competition Tracker</title>
   <style>
     body {
@@ -17,7 +17,7 @@
     }
     h1 {
       text-align: center;
-      color: #080808;
+      color: #ffffff;
       text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
     }
     .team-form, .team, .login-form {
@@ -73,11 +73,6 @@
       border-radius: 5px;
       border: 1px solid #ccc;
     }
-    .edit-input {
-      width: 80%;
-      margin: 5px auto;
-      display: block;
-    }
     ul.member-list {
       list-style: none;
       padding: 0;
@@ -102,20 +97,19 @@
       padding: 4px 8px;
       font-size: 0.8em;
     }
-    #logoutBtn, #resetScoresBtn {
+    /* Hide admin UI on page load */
+    #logoutBtn, #resetScoresBtn, .team-form {
       display: none;
-      margin: 10px auto;
-      display: block;
     }
   </style>
 </head>
 <body>
-  <h1>🏆 Team Pitch Perfect</h1>
+  <h1>🏆 Team Competition Tracker</h1>
 
-  <div class="team-form" style="display:none">
-    <input id="teamName" placeholder="Team Name"><br>
-    <input id="teamMembers" placeholder="Comma-separated Member Names"><br>
-    <input id="teamLogo" placeholder="Logo Image URL (optional)"><br>
+  <div class="team-form">
+    <input id="teamName" placeholder="Team Name" /><br />
+    <input id="teamMembers" placeholder="Comma-separated Member Names" /><br />
+    <input id="teamLogo" placeholder="Logo Image URL (optional)" /><br />
     <button onclick="addTeam()">Add Team</button>
   </div>
 
@@ -125,18 +119,23 @@
   <div id="teams"></div>
 
   <div class="login-form">
-    <input id="adminPassword" type="password" placeholder="Admin Password"><br>
+    <input id="adminPassword" type="password" placeholder="Admin Password" /><br />
     <button onclick="loginAdmin()">Login</button>
   </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
     import {
-      getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot
+      getFirestore,
+      collection,
+      addDoc,
+      getDocs,
+      doc,
+      updateDoc,
+      deleteDoc,
+      onSnapshot,
     } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-firestore.js";
-    import {
-      getAuth, signInAnonymously, onAuthStateChanged
-    } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-auth.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyAmDBelUbSmLhY1VFIw2DiQvTRHqrG0kAk",
@@ -152,97 +151,128 @@
     const db = getFirestore(app);
     const auth = getAuth();
 
-    signInAnonymously(auth).catch(error => {
-      console.error("Anonymous sign-in failed:", error);
-    });
-
-    onAuthStateChanged(auth, user => {
-      if (user) {
-        console.log("Signed in as:", user.uid);
-        renderTeams();
-      } else {
-        console.log("Signed out");
-      }
-    });
-
     let isAdmin = false;
+    let latestTeamsSnapshot = null;
 
-    function renderTeams() {
-      const teamsDiv = document.getElementById('teams');
-      teamsDiv.innerHTML = '';
-      const q = collection(db, 'teams');
-      onSnapshot(q, snapshot => {
-        teamsDiv.innerHTML = '';
-        snapshot.forEach(docSnap => {
-          const team = docSnap.data();
+    // Hide admin UI on load (redundant but safe)
+    document.getElementById("logoutBtn").style.display = "none";
+    document.getElementById("resetScoresBtn").style.display = "none";
+    document.querySelector(".team-form").style.display = "none";
 
-          // Sort team members by score (descending)
-          team.members.sort((a, b) => b.score - a.score);
+    signInAnonymously(auth).catch(console.error);
 
-          const totalScore = team.members.reduce((sum, m) => sum + m.score, 0);
-          const teamDiv = document.createElement('div');
-          teamDiv.className = 'team';
-          teamDiv.innerHTML = `
-            ${team.logo ? `<img src="${team.logo}" class="team-logo"><br>` : ''}
-            <h2>${team.name}</h2>
-            <div class="score">Score: ${totalScore}</div>
-            ${isAdmin ? `
-              <button onclick="updateScore('${docSnap.id}', 1)">+1</button>
-              <button onclick="updateScore('${docSnap.id}', -1)">-1</button>
-            ` : ''}
-            <ul class="member-list">
-              ${team.members.map((m, idx) => `
-                <li class="member-score">
-                  <span>${m.name} - ${m.score}</span>
-                  ${isAdmin ? `
-                    <button onclick="updateMemberScore('${docSnap.id}', ${idx}, 1)">+1</button>
-                    <button onclick="updateMemberScore('${docSnap.id}', ${idx}, -1)">-1</button>
-                  ` : ''}
-                </li>
-              `).join('')}
-            </ul>
-            ${isAdmin ? `<button onclick="deleteTeam('${docSnap.id}')">Delete Team</button>` : ''}
-          `;
-          teamsDiv.appendChild(teamDiv);
-        });
+    // Real-time listener for teams collection
+    const teamsCollection = collection(db, "teams");
+    onSnapshot(teamsCollection, (snapshot) => {
+      latestTeamsSnapshot = snapshot;
+      renderTeamsFromSnapshot(snapshot);
+    });
+
+    function renderTeamsFromSnapshot(snapshot) {
+      if (!snapshot) return;
+      const teamsDiv = document.getElementById("teams");
+      teamsDiv.innerHTML = "";
+
+      snapshot.forEach((docSnap) => {
+        const team = docSnap.data();
+        const totalScore = team.members.reduce((sum, m) => sum + m.score, 0);
+        const sortedMembers = [...team.members].sort((a, b) => b.score - a.score);
+        const teamDiv = document.createElement("div");
+        teamDiv.className = "team";
+        teamDiv.innerHTML = `
+          ${team.logo ? `<img src="${team.logo}" class="team-logo"><br>` : ""}
+          <h2>${team.name}</h2>
+          <div class="score">Score: ${totalScore}</div>
+          ${
+            isAdmin
+              ? `
+            <button onclick="updateScore('${docSnap.id}', 1)">+1</button>
+            <button onclick="updateScore('${docSnap.id}', -1)">-1</button>
+          `
+              : ""
+          }
+          <ul class="member-list">
+            ${sortedMembers
+              .map((m) => {
+                const memberIndex = team.members.findIndex(
+                  (mem) => mem.name === m.name
+                );
+                return `
+              <li class="member-score">
+                <span>${m.name} - ${m.score}</span>
+                ${
+                  isAdmin
+                    ? `
+                  <button onclick="updateMemberScore('${docSnap.id}', ${memberIndex}, 1)">+1</button>
+                  <button onclick="updateMemberScore('${docSnap.id}', ${memberIndex}, -1)">-1</button>
+                `
+                    : ""
+                }
+              </li>
+            `;
+              })
+              .join("")}
+          </ul>
+          ${
+            isAdmin
+              ? `<button onclick="deleteTeam('${docSnap.id}')">Delete Team</button>`
+              : ""
+          }
+        `;
+        teamsDiv.appendChild(teamDiv);
       });
     }
 
     window.addTeam = async function () {
-      const name = document.getElementById('teamName').value;
-      const members = document.getElementById('teamMembers').value.split(',').map(n => ({ name: n.trim(), score: 0 }));
-      const logo = document.getElementById('teamLogo').value;
-      await addDoc(collection(db, 'teams'), { name, members, logo, score: 0 });
+      const name = document.getElementById("teamName").value.trim();
+      if (!name) return alert("Please enter a team name.");
+
+      const membersInput = document.getElementById("teamMembers").value.trim();
+      if (!membersInput) return alert("Please enter at least one member.");
+
+      const members = membersInput
+        .split(",")
+        .map((n) => ({ name: n.trim(), score: 0 }))
+        .filter((m) => m.name.length > 0);
+
+      const logo = document.getElementById("teamLogo").value.trim();
+
+      await addDoc(collection(db, "teams"), { name, members, logo, score: 0 });
+
+      document.getElementById("teamName").value = "";
+      document.getElementById("teamMembers").value = "";
+      document.getElementById("teamLogo").value = "";
     };
 
     window.updateScore = async function (id, delta) {
-      const ref = doc(db, 'teams', id);
-      const snap = await getDocs(collection(db, 'teams'));
-      const data = snap.docs.find(d => d.id === id).data();
-      await updateDoc(ref, { score: data.score + delta });
+      const ref = doc(db, "teams", id);
+      const snap = await getDocs(collection(db, "teams"));
+      const data = snap.docs.find((d) => d.id === id).data();
+      await updateDoc(ref, { score: (data.score || 0) + delta });
     };
 
     window.updateMemberScore = async function (id, memberIndex, delta) {
-      const ref = doc(db, 'teams', id);
-      const snap = await getDocs(collection(db, 'teams'));
-      const data = snap.docs.find(d => d.id === id).data();
+      const ref = doc(db, "teams", id);
+      const snap = await getDocs(collection(db, "teams"));
+      const data = snap.docs.find((d) => d.id === id).data();
       data.members[memberIndex].score += delta;
       await updateDoc(ref, { members: data.members });
     };
 
     window.deleteTeam = async function (id) {
-      await deleteDoc(doc(db, 'teams', id));
+      if (!confirm("Are you sure you want to delete this team?")) return;
+      await deleteDoc(doc(db, "teams", id));
     };
 
     window.loginAdmin = function () {
-      const pass = document.getElementById('adminPassword').value;
+      const pass = document.getElementById("adminPassword").value;
       if (pass === "yourpassword") {
         isAdmin = true;
-        document.querySelector('.team-form').style.display = 'block';
-        document.getElementById('logoutBtn').style.display = 'block';
-        document.getElementById('resetScoresBtn').style.display = 'block';
-        document.querySelector('.login-form').style.display = 'none';
-        renderTeams();
+        document.querySelector(".team-form").style.display = "block";
+        document.getElementById("logoutBtn").style.display = "block";
+        document.getElementById("resetScoresBtn").style.display = "block";
+        document.querySelector(".login-form").style.display = "none";
+        renderTeamsFromSnapshot(latestTeamsSnapshot);
       } else {
         alert("Incorrect password.");
       }
@@ -250,20 +280,21 @@
 
     window.logoutAdmin = function () {
       isAdmin = false;
-      document.querySelector('.team-form').style.display = 'none';
-      document.getElementById('logoutBtn').style.display = 'none';
-      document.getElementById('resetScoresBtn').style.display = 'none';
-      document.querySelector('.login-form').style.display = 'block';
-      renderTeams();
+      document.querySelector(".team-form").style.display = "none";
+      document.getElementById("logoutBtn").style.display = "none";
+      document.getElementById("resetScoresBtn").style.display = "none";
+      document.querySelector(".login-form").style.display = "block";
+      renderTeamsFromSnapshot(latestTeamsSnapshot);
     };
 
     window.resetAllScores = async function () {
-      const q = await getDocs(collection(db, 'teams'));
+      if (!confirm("Reset all team and member scores to zero?")) return;
+      const q = await getDocs(collection(db, "teams"));
       for (const docSnap of q.docs) {
         const data = docSnap.data();
         data.score = 0;
-        data.members = data.members.map(m => ({ ...m, score: 0 }));
-        await updateDoc(doc(db, 'teams', docSnap.id), data);
+        data.members = data.members.map((m) => ({ ...m, score: 0 }));
+        await updateDoc(doc(db, "teams", docSnap.id), data);
       }
     };
   </script>
